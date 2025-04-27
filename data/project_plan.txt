@@ -1,0 +1,94 @@
+# Trading Bot Project Plan
+
+## 1. Project Initialization
+- [x] Set up repo structure as per the specification
+- [x] Create requirements.txt and .env.example
+- [x] Set up Docker and docker-compose for Postgres+TimescaleDB and app
+- [x] Initialize git and basic CI (lint/test stubs)
+
+---
+
+## 2. Core Backend Modules (in order of dependency)
+
+### 2.1 Database Models (`db_models.py`)
+- [x] Define SQLAlchemy models for `raw_prices`, `indicators`, `signals`
+- [x] Add unique constraints, indexes, and relationships
+- [x] Implement DB session management and table creation
+
+### 2.2 Data Ingestion (`data_fetch.py`)
+- [x] Implement `fetch_daily` using yfinance
+- [x] Add backfill and incremental update logic
+- [x] Handle rate limits and retries
+- [x] Write to `raw_prices` table
+
+### 2.3 Indicator Engine (`indicators.py`)
+- [x] Read from `raw_prices`, compute indicators (SMA, EMA, RSI, MACD, etc)
+- [x] Store results in `indicators` table as JSON
+
+### 2.4 Signal Engine (`signal_engine.py`)
+- [x] Read from `indicators`, apply rule-based logic (crossovers, RSI, etc)
+- [x] Write signals to `signals` table, with details and executed flag
+
+### 2.5 Backtesting (`backtest.py`)
+- [x] Use Zipline or vectorized pandas for historical simulation
+- [x] Ensure logic mirrors live signal engine
+- [x] Output performance metrics and compare with signals table
+
+### 2.6 Executor (`executor.py`)
+- [x] Poll for unexecuted signals
+- [x] Connect to Alpaca API (paper trading)
+- [x] Place orders, mark signals as executed, log results
+- [x] Implement dry-run mode and cash checks
+
+---
+
+## 3. API & Real-Time Feed
+
+### 3.1 FastAPI Server (`app.py`)
+- [x] REST endpoint: `/latest` for recent signals
+- [x] WebSocket endpoint: `/ws` for real-time updates
+- [x] Dependency-injected DB sessions
+- [x] Table auto-creation on startup
+
+---
+
+## 4. Front-End Dashboard
+
+### 4.1 Dash App (`dashboard.py`)
+- [x] Live-updating table of signals
+- [x] (Future) Candlestick chart with buy/sell markers
+- [x] Connect via REST or WebSocket
+
+---
+
+## 5. Infrastructure & DevOps
+- [x] Dockerize all services
+- [x] docker-compose for DB and app orchestration
+- [x] CI/CD: Lint, test, and build on PRs
+- [x] .env for secrets/config
+
+---
+
+## 6. Best Practices & Risk Mitigation
+- [x] Data quality: Enforce unique constraints, normalize timestamps, validate data
+- [x] API reliability: Use retries, chunked backfills, monitor usage
+- [x] DB performance: Indexing, transactions, test with large data
+- [x] Indicator/signal correctness: Use tested libs, unit tests, log values
+- [x] Order execution: Check `executed` flag, cash checks, dry-run, log all
+- [x] Real-time: Robust FastAPI/WS, health checks
+- [x] Deployment: Use .env, pin deps, test Docker
+- [x] Security: No secrets in code, secure endpoints
+- [x] Scalability: Modular code, TimescaleDB, plan for scaling
+- [x] Testing: Unit/integration tests, CI, compare backtest/live
+
+---
+
+## 7. Final Steps & Documentation
+- [x] Update README.md with detailed setup and usage instructions
+- [x] Add inline documentation and comments to all modules
+- [x] Finalize Docker and CI/CD setup
+- [x] Conduct a final review and testing of all components
+
+---
+
+*This plan will be updated as the project progresses. All implementation steps and risk mitigations will be referenced and adapted here for ongoing success.* 

@@ -1,0 +1,303 @@
+# Trading Bot Specification
+
+**Purpose:**  
+Provide a comprehensive, self-contained blueprint for building a zero‑leverage, end‑to‑end Python trading bot—from data ingestion through live execution and real‑time visualization—so that any engineer or team can clone, configure, and deploy the system.
+
+---
+
+## Table of Contents
+1. [High-Level Architecture](#high-level-architecture)  
+2. [Core Components](#core-components)  
+   1. [Data Ingestion (`data_fetch.py`)](#1-data-ingestion)  
+   2. [Data Storage & Schema (`db_models.py`)](#2-data-storage--schema)  
+   3. [Indicator Engine (`indicators.py`)](#3-indicator-engine)  
+   4. [Signal Detection (`signal_engine.py`)](#4-signal-detection)  
+   5. [Backtesting (`backtest.py`)](#5-backtesting)  
+   6. [Live Execution (`executor.py`)](#6-live-execution)  
+   7. [API & Real-Time Feed (`app.py`)](#7-api--real-time-feed)  
+   8. [Front-End Dashboard (`dashboard.py`)](#8-front-end-dashboard)  
+3. [Project Structure & File Descriptions](#project-structure--file-descriptions)  
+4. [Configuration & Environment](#configuration--environment)  
+5. [Development & Deployment](#development--deployment)  
+   1. [Quick Start](#quick-start)  
+   2. [Docker Setup](#docker-setup)  
+   3. [CI/CD Pipeline](#cicd-pipeline)  
+6. [Best Practices & Extensions](#best-practices--extensions)
+
+---
+
+## High-Level Architecture
+
+```text
++-----------------+       +-----------------+       +-------------------+
+|                 |       |                 |       |                   |
+| Data Ingestion  |  ---> |  Data Store     |  ---> |  Indicator Engine |
+| (data_fetch.py) |       | (Postgres +     |       | (indicators.py)   |
+|                 |       |  TimescaleDB)   |       |                   |
++-----------------+       +-----------------+       +-------------------+
+                                                         |
+                                                         v
++-----------------+       +-----------------+       +-------------------+
+|                 |       |                 |       |                   |
+|  Backtesting    | <---  |  Signal Engine  |  ---> |  Live Executor    |
+| (backtest.py)   |       |(signal_engine.py)|      | (executor.py)     |
+|                 |       |                 |       |                   |
++-----------------+       +-----------------+       +-------------------+
+                                                         |
+                                                         v
+                                               +------------------------+
+                                               |  API & Real-Time Feed  |
+                                               |      (app.py)          |
+                                               +------------------------+
+                                                         |
+                                                         v
+                                               +------------------------+
+                                               |   Front-End Dashboard   |
+                                               |     (dashboard.py)      |
+                                               +------------------------+
+```
+
+**Data Flow:**  
+1. **Ingestion** pulls OHLCV bars for chosen tickers.  
+2. **Storage** writes raw data; **Indicator Engine** computes and persists derived features.  
+3. **Signal Engine** applies rule-based (or ML) logic to generate time-stamped buy/sell events.  
+4. **Backtester** runs identical logic over history to validate strategy.  
+5. **Executor** reads new signals and places market orders on Alpaca (paper/live) within cash constraints.  
+6. **API** exposes REST and WebSocket endpoints for downstream clients.  
+7. **Dashboard** consumes endpoints to display live alerts and performance.
+
+---
+
+## Core Components
+
+### 1. Data Ingestion
+**File:** `data_fetch.py`  
+**Responsibilities:**  
+- Connect to one or more data providers (e.g. Yahoo Finance via `yfinance`).  
+- Support bulk backfill (monthly/yearly paging) and incremental updates.  
+- Handle API rate limits with retry & exponential back-off.  
+
+**Key Function:**
+```python
+def fetch_daily(symbol: str, start: str, end: str) -> pandas.DataFrame:
+    # Returns OHLCV daily bars with timezone-naive index
+```  
+
+**Scheduling:**  
+- Use cron or Celery beat to run daily at market close.  
+- For intraday: run every N minutes (e.g. 5m) based on strategy requirements.
+
+### 2. Data Storage & Schema
+**File:** `db_models.py`  
+**Database:** PostgreSQL + TimescaleDB extension  
+
+**Tables & Columns:**  
+| Table         | Columns                                                      |
+|--------------:|--------------------------------------------------------------|
+| `raw_prices`  | id, symbol, timestamp, open, high, low, close, volume        |
+| `indicators`  | id, symbol, timestamp, values (JSON payload of feature dict) |
+| `signals`     | id, symbol, timestamp, signal_type, details (JSON), executed (bool) |
+
+**Indexes & Constraints:**  
+- Unique index on (`symbol`, `timestamp`) for `raw_prices` and `indicators`.  
+- Foreign-key if desired to link `signals` to raw data rows.  
+- `executed` flag to prevent duplicate order placements.
+
+### 3. Indicator Engine
+**File:** `indicators.py`  
+**Library:** `pandas_ta` (or TA-Lib)  
+
+**Computations:**  
+- SMA (20), EMA (50), RSI (14) out of the box.  
+- Extendable: MACD, Bollinger Bands, ATR, custom ML features.  
+
+**Output:**  
+- Persist each timestamp’s indicator vector into `indicators.values` as a JSON dictionary.
+
+### 4. Signal Detection
+**File:** `signal_engine.py`  
+**Pattern:** Rule-based, event-driven  
+
+**Logic Steps:**  
+1. Load most recent N rows from `indicators`.  
+2. Detect SMA/EMA crossovers over the last two bars.  
+3. Check RSI thresholds (e.g. oversold <30, overbought >70).  
+4. (Optional) Apply volatility & volume filters.  
+5. Insert new rows in `signals` with `signal_type` and detail payload (price, indicator values).
+
+**Extensibility:**  
+- Swap in an ML classifier by training on labeled past signals.  
+- Add means of change-point detection (e.g. CUSUM).  
+
+### 5. Backtesting
+**File:** `backtest.py`  
+**Framework:** `zipline` (or vectorized Moonshot)  
+
+**Workflow:**  
+- Run local Zipline bundle (e.g. Quantopian ingest or direct CSV feed).  
+- Initialize with `initialize()` and `handle_data()` mirroring live logic.  
+- Produce a DataFrame of portfolio returns & recorded signals.  
+- Export tear sheet (drawdowns, Sharpe, P&L curves).
+
+**Validation:**  
+- Ensure buy/sell from backtest align with entries in `signals` on same logic.  
+- Use cross-validation on different date ranges to avoid overfitting.
+
+### 6. Live Execution
+**File:** `executor.py`  
+**Broker API:** Alpaca (paper endpoint by default)  
+
+**Features:**  
+- Query `signals.executed == False`.  
+- Retrieve account cash via `api.get_account()`.  
+- Compute order size: `floor(cash / price)` to use available capital.  
+- Submit market order via `api.submit_order()`.  
+- Mark signal as executed and log execution details (order id, fill qty).
+
+**Safeguards:**  
+- Hard-check `order_size * price <= cash` before placing any order.  
+- Respect rate limits: pause on HTTP 429.  
+- Dry-run flag to simulate trades without API calls.
+
+### 7. API & Real-Time Feed
+**File:** `app.py`  
+**Web Framework:** FastAPI + `uvicorn`  
+
+**Endpoints:**  
+- **GET `/latest`**: returns most recent N signals as JSON.  
+- **WebSocket `/ws`**: streams new signals in real time.  
+
+**Implementation Details:**  
+- On startup, auto-create tables via `Base.metadata.create_all()`.  
+- In `/ws`, maintain `last_id`, poll DB every T seconds (e.g. 5s), push any new signals.  
+- Use dependency injection for DB sessions.  
+
+### 8. Front‑End Dashboard
+**File:** `dashboard.py`  
+**Library:** Dash (Plotly)  
+
+**UI Elements:**  
+- Interval-driven callback (`dcc.Interval`) or WebSocket listener.  
+- Live-updating list of signals: symbol, type, price, timestamp.  
+- Future: add candlestick charts with embedded buy/sell markers and performance metrics.
+
+**Extension:**  
+- Replace with React + Socket.IO for richer UI, custom toasts, PWA notifications.
+
+---
+
+## Project Structure & File Descriptions
+```text
+trading_bot/                  # Root directory
+├── data_fetch.py            # Data ingestion module
+├── db_models.py             # SQLAlchemy ORM definitions
+├── indicators.py            # Technical indicator computations
+├── signal_engine.py         # Strategy logic & signal generation
+├── backtest.py              # Historical backtesting script
+├── executor.py              # Live/paper trade executor
+├── app.py                   # FastAPI server (REST & WS)
+├── dashboard.py             # Dash-based front-end
+├── requirements.txt         # Pinned Python dependencies
+├── README.md                # High-level overview & instructions
+├── .gitignore               # Git ignore patterns
+├── .env.example             # Template for environment vars
+├── Dockerfile               # Container build definition
+├── docker-compose.yml       # Multi-service orchestration (DB + app)
+└── .github/workflows/       # CI/CD pipeline definitions
+```
+
+Each file should begin with loading environment variables (via `python-dotenv`) and configuring a structured logger.  
+Database URL and API keys are read exclusively from environment for security and flexibility.
+
+---
+
+## Configuration & Environment
+
+1. **Environment Variables** (populate `.env` from `.env.example`):
+   ```dotenv
+   DATABASE_URL=postgresql://user:password@db:5432/trading_bot
+   ALPACA_API_KEY=your_key
+   ALPACA_API_SECRET=your_secret
+   YFINANCE_BACKFILL_CHUNK=1mo        # optional: backfill paging
+   POLLING_INTERVAL=10               # seconds for WS polling
+   ```
+2. **Python Dependencies:**
+   ```text
+   fastapi
+   uvicorn[standard]
+   dash
+dash-extensions
+   requests
+   sqlalchemy
+   psycopg2-binary
+   pandas
+   numpy
+   pandas-ta
+   TA-Lib
+yfinance
+   zipline
+   alpaca-trade-api
+   python-dotenv
+   ```
+3. **Local Development:**
+   - Use a virtual environment (`venv` or `conda`).  
+   - Install dependencies with `pip install -r requirements.txt`.  
+
+---
+
+## Development & Deployment
+
+### Quick Start
+1. **Clone & configure**:
+   ```bash
+   git clone git@github.com:your-org/trading_bot.git
+   cd trading_bot
+   cp .env.example .env
+   # Fill in .env with real values
+   pip install -r requirements.txt
+   ```
+2. **Database**:
+   ```bash
+   # If using Docker:
+   docker-compose up -d db
+   # Otherwise, install Postgres + TimescaleDB locally and create db
+   createdb trading_bot
+   ```
+3. **Run services**:
+   ```bash
+   uvicorn app:app --reload           # API + WS server
+   python executor.py                # paper trade worker (keep running)
+   python backtest.py                # optional backtest run
+   python dashboard.py               # open http://localhost:8050
+   ```
+
+### Docker Setup
+1. **Build & launch** all containers:
+   ```bash
+docker-compose up --build
+   ```
+2. **Services exposed:**
+   - API & WS: `http://localhost:8000`  
+   - Dash UI: `http://localhost:8050`
+
+### CI/CD Pipeline
+- **Linting**: `flake8` on all `.py` files.  
+- **Tests**: stubbed for future `pytest` coverage of strategy logic & DB models.  
+- **Workflow**: On PR → install deps, lint, run tests.  
+- **Deployment**: Push Docker images to registry, deploy via Kubernetes or Docker Swarm.
+
+---
+
+## Best Practices & Extensions
+- **No Leverage Enforcement**: always check available cash before order; broker margin disabled.  
+- **Idempotency**: mark signals `executed` to prevent duplicates.  
+- **Error Handling**: wrap external calls in retries with jitter.  
+- **Logging & Monitoring**: integrate `Prometheus` metrics and log to ELK/CloudWatch.  
+- **Security**: secure API endpoints with OAuth2 or API keys; limit CORS on front-end.  
+- **Scalability**: partition time-series data in TimescaleDB; scale executor workers via Celery + Redis broker.  
+- **Feature Enhancements**: add ML-driven signal classifier; build mobile PWA with push notifications; integrate broker execution for live trading with risk limits.
+
+---
+
+*End of Specification.*
+

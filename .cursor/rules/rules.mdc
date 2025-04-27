@@ -1,0 +1,113 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Agent Rules & Guidelines (rules.mdc)
+
+This `rules.mdc` file defines strict guidelines and conventions your Cursor-based agent must follow to build, configure, and maintain the zero-leverage trading bot project.  
+Any deviations or omissions are _mistakes_ and must be corrected.
+
+---
+
+## 1. Project Scaffold
+
+1. **Directory Layout**: Must match exactly the specified tree. No extra files at root.  
+2. **Naming**: All module filenames (`data_fetch.py`, `db_models.py`, etc.) must use snake_case and match spec.  
+3. **Encodings**: UTF-8 without BOM for all files.
+
+## 2. Configuration & Secrets
+
+1. **Environment Variables**: Use a `.env` file loaded via `python-dotenv`.  
+2. **`.env.example`**: Include every variable: `DATABASE_URL`, `ALPACA_API_KEY`, `ALPACA_API_SECRET`, `YFINANCE_BACKFILL_CHUNK`, `POLLING_INTERVAL`.  
+3. **No Hard-Coding**: Never embed credentials, URLs, or secrets in code.
+
+## 3. Dependencies & Requirements
+
+1. **requirements.txt**: Must list exact package names (no ranges), one per line.  
+2. **Locked Versions**: After first run, pin versions to avoid drift.  
+3. **Python Version**: Target Python 3.10+.  
+4. **Linting**: Include `flake8` in CI; target zero lint errors.
+
+## 4. Database & Schema
+
+1. **PostgreSQL + TimescaleDB**: Use the provided `docker-compose.yml`.  
+2. **SQLAlchemy `Base.metadata.create_all()`**: Only in `app.py` startup.  
+3. **Alembic**: _(Optional)_ If migrations added, follow strict versioning.
+4. **Models**: Include `executed` Boolean on `Signal`. Unique constraints on (`symbol`,`timestamp`).
+
+## 5. Code Quality & Conventions
+
+1. **Imports**: Standard library first, then 3rd-party, then local modules. Use absolute imports.  
+2. **Docstrings**: All functions and modules must have clear docstrings.  
+3. **Type Hints**: Use PEP484 type hints for all function signatures.  
+4. **Logging**: Use Python `logging` with clear messages and levels. No `print()` calls in production code.
+
+## 6. Error Handling & Retries
+
+1. **External Calls**: Wrap API calls (yfinance, Alpaca, DB) in try/except with exponential back-off and jitter.  
+2. **Rate Limits**: On HTTP 429, pause and retry.  
+3. **Fatal Errors**: Should raise exceptions that bubble up to a supervisor, not silently fail.
+
+## 7. Business Logic
+
+1. **No Leverage**: Enforce `order_size * price <= account.cash`.  
+2. **Idempotency**: Only one execution per `Signal`. Use `executed` flag.  
+3. **Signal Logic**: Must exactly follow SMA20/EMA50 crossover and RSI thresholds, no shortcuts.
+
+## 8. API Endpoints & Real-Time Feed
+
+1. **REST**  
+   - `GET /latest`: Returns last 20 signals, newest first.  
+2. **WebSocket**  
+   - `/ws`: On connect, accept then stream any new signals every `POLLING_INTERVAL` seconds.  
+3. **Session Management**: Use SQLAlchemy session per request; close sessions in finally block.
+
+## 9. Front-End Integration
+
+1. **Dash App**:  
+   - Use `dcc.Interval` to poll `/latest`.  
+   - Display only symbol, type, price, timestamp.  
+   - No direct DB queries in front-end.
+
+## 10. Backtesting
+
+1. **Zipline**: Must replicate live logic exactly in `initialize` and `handle_data`.  
+2. **Capital Base**: Default to 10,000.  
+3. **Reporting**: Print last few rows; export tear sheet data if extended.
+
+## 11. CI/CD & Testing
+
+1. **CI Workflow**: On push & PR to `main`, run:  
+   - `pip install -r requirements.txt`  
+   - `flake8 .` (no errors)  
+   - `pytest` (future; stub tests pass)  
+2. **Unit Tests**: Cover core functions: indicator calc, signal detection, fetch logic.  
+3. **Integration Tests**: Simulate DB and API to ensure end-to-end flow.
+
+## 12. Documentation
+
+1. **README.md**: Must include all sections: Quick Start, File Structure, Config, Docker, CI, Best Practices.  
+2. **In-Code Comments**: Keep comments up-to-date; remove stale notes.
+
+## 13. Security & Permissions
+
+1. **API Keys**: Only in `.env`, not in Git.  
+2. **CORS**: Restrict Dash to `http://localhost:8050` during development.  
+3. **HTTPS**: Enforce HTTPS in production; no insecure endpoints.
+
+## 14. Monitoring & Logging
+
+1. **Metrics**: Expose Prometheus metrics endpoint in `app.py` (optional).  
+2. **Log Format**: JSON logs with timestamp, level, module, message.
+
+## 15. Agent Behavior
+
+1. **Follow Spec Exactly**: No deviations.  
+2. **Ask for Clarifications**: If uncertain, fail-fast and prompt.  
+3. **Version Control**: Commit each logical change with clear messages.  
+4. **Review & Validate**: After scaffolding, run smoke tests: Docker Compose up, fetch data, generate a signal, view in dashboard.
+
+---
+
+> **Note:** Any violation of these rules is considered a bug and must be corrected immediately. This document is the _single source of truth_ for the project’s conventions and behaviors.
