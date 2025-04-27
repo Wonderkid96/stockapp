@@ -8,8 +8,8 @@ generating performance metrics, and comparing results with the signals table.
 # Historical backtesting script
 import logging
 import pandas as pd
-from trading_bot.db_models import get_db, RawPrice, Indicator
-from trading_bot.signal_engine import detect_ma_crossover, detect_rsi_signals
+from stockapp.db_models import get_db, RawPrice, Indicator
+from stockapp.signal_engine import detect_ma_crossover, detect_rsi_signals
 
 # Configure logging
 logging.basicConfig(

@@ -61,6 +61,20 @@ db-rollback:
 docs:
 	sphinx-build -b html docs/ docs/_build/html
 
+# Alembic migrations
+alembic-revision:
+	PYTHONPATH=src alembic revision --autogenerate -m "$(msg)"
+
+alembic-upgrade:
+	PYTHONPATH=src alembic upgrade head
+
+alembic-downgrade:
+	PYTHONPATH=src alembic downgrade -1
+
+# Example usage:
+# make alembic-revision msg="Add new table"
+# make alembic-upgrade
+
 # Help
 help:
 	@echo "Available commands:"

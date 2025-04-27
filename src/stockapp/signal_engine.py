@@ -10,7 +10,7 @@ import logging
 import pandas as pd
 from datetime import datetime
 from sqlalchemy.orm import Session
-from trading_bot.db_models import get_db, Indicator, Signal
+from stockapp.db_models import get_db, Indicator, Signal
 
 # Configure logging
 logging.basicConfig(

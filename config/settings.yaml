@@ -1,0 +1,24 @@
+account:
+  initial_balance: 10000
+  risk_per_trade_pct: 0.5
+  max_daily_loss_pct: 3
+  max_open_positions: 5
+
+strategy:
+  opening_range_minutes: 5
+  volume_multiplier_threshold: 1.5
+  risk_reward_ratio: 2
+
+broker:
+  name: "alpaca"
+  api_key: "${ALPACA_API_KEY}"
+  api_secret: "${ALPACA_API_SECRET}"
+  paper_trading: true
+
+data:
+  timeframe: "1Min"
+  historical_days: 365
+
+alerts:
+  slack_webhook_url: "${SLACK_WEBHOOK_URL}"
+  daily_report_channel: "#trading-reports" 

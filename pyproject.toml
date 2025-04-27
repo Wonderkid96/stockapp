@@ -61,4 +61,11 @@ skips = ["B101"]
 [tool.commitizen]
 name = "cz_conventional_commits"
 version = "0.1.0"
-tag_format = "v$version" 
+tag_format = "v$version"
+
+[tool.poetry]
+name = "stockapp"
+version = "0.1.0"
+description = "Stock trading and analysis app"
+authors = ["Your Name <you@example.com>"]
+packages = [{ include = "stockapp", from = "src" }] 

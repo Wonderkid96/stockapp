@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import yfinance as yf
 from sqlalchemy.orm import Session
-from trading_bot.db_models import get_db, RawPrice
+from stockapp.db_models import get_db, RawPrice
 
 # Configure logging
 logging.basicConfig(

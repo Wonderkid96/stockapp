@@ -9,7 +9,7 @@ import logging
 import time
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
-from trading_bot.db_models import get_db, Signal
+from stockapp.db_models import get_db, Signal
 import alpaca_trade_api as tradeapi
 
 # Configure logging

@@ -9,7 +9,7 @@ providing a GET /latest endpoint and a WebSocket /ws endpoint for streaming new 
 import logging
 from fastapi import FastAPI, WebSocket, Depends, HTTPException
 from sqlalchemy.orm import Session
-from trading_bot.db_models import get_db, Signal, init_db
+from stockapp.db_models import get_db, Signal, init_db
 import asyncio
 
 # Configure logging

@@ -10,7 +10,7 @@ import logging
 import pandas as pd
 import pandas_ta as ta
 from sqlalchemy.orm import Session
-from trading_bot.db_models import get_db, RawPrice, Indicator
+from stockapp.db_models import get_db, RawPrice, Indicator
 
 # Configure logging
 logging.basicConfig(
