@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    name: Lint, Type, Security, Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    env:
+      # Load all required env vars from .env.example
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/stockapp
+      ALPACA_API_KEY: dummy
+      ALPACA_API_SECRET: dummy
+      YFINANCE_BACKFILL_CHUNK: 60
+      POLLING_INTERVAL: 5
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: stockapp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 black isort mypy bandit safety pytest
+
+      - name: Wait for DB
+        run: |
+          for i in {1..10}; do
+            pg_isready -h localhost -p 5432 -U postgres && break
+            sleep 3
+          done
+
+      - name: Lint (flake8)
+        run: flake8 src/stockapp --max-line-length=88 --extend-ignore=E203,W503
+
+      - name: Format check (black)
+        run: black --check src/stockapp
+
+      - name: Import order check (isort)
+        run: isort --check-only src/stockapp
+
+      - name: Type check (mypy)
+        run: mypy src/stockapp
+
+      - name: Security scan (bandit)
+        run: bandit -r src/stockapp -ll
+
+      - name: Dependency scan (safety)
+        run: |
+          pip freeze > .reqs.tmp.txt
+          safety check --file .reqs.tmp.txt --full-report
+
+      - name: Run tests
+        run: pytest
+
+      - name: Print DB logs on failure
+        if: failure()
+        run: docker logs $(docker ps -q --filter ancestor=timescale/timescaledb:latest-pg14) 
