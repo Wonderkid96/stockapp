@@ -19,6 +19,7 @@ alpaca-trade-api==3.0.2
 # Testing and Linting
 pytest==7.4.3
 flake8==6.1.0
+mock==4.0.3
 
 # Backtesting
 zipline-reloaded==2.2.0
