@@ -67,3 +67,22 @@ python -m stockapp.main
 
 ## License
 MIT 
+
+## Environment Variables
+
+The following environment variables are required:
+
+### Required Variables
+- `DATABASE_URL`: PostgreSQL connection string
+- `ALPACA_API_KEY`: Your Alpaca API key
+- `ALPACA_API_SECRET`: Your Alpaca API secret
+- `SECRET_KEY`: Secret key for JWT tokens (generate with: `openssl rand -hex 32`)
+
+### Optional Variables
+- `YFINANCE_BACKFILL_CHUNK`: Number of days to fetch in each backfill request (default: 100)
+- `POLLING_INTERVAL`: Seconds between market data updates (default: 60)
+- `LOG_LEVEL`: Logging level (default: INFO)
+- `SENTRY_DSN`: Sentry DSN for error tracking
+- `CORS_ORIGINS`: Comma-separated list of allowed origins
+- `REDIS_URL`: Redis connection for task queue
+- `TEST_DATABASE_URL`: Database URL for testing 
