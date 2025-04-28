@@ -1,17 +1,28 @@
 # Dockerfile for Trading Bot
-FROM python:3.10-slim
+FROM python:3.8-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements file
-COPY requirements.txt .
+# Copy project files
+COPY pyproject.toml poetry.lock ./
+COPY src/ ./src/
 
 # Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi --no-root
 
-# Copy the rest of the application
-COPY . .
+# Install the project
+RUN poetry install --no-interaction --no-ansi
 
-# Command to run the application
-CMD ["python", "-m", "trading_bot.app"] 
+# Run the application
+CMD ["poetry", "run", "uvicorn", "stockapp.main:app", "--host", "0.0.0.0", "--port", "8000"] 
