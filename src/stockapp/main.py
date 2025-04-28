@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
@@ -7,14 +7,15 @@ import os
 from dotenv import load_dotenv
 
 from .database import get_db, engine
-from . import models, schemas
+from . import schemas
+from .db_models import RawPrice, Indicator, Signal, Base
 from .data_fetch import update_latest
 
 # Load environment variables
 load_dotenv()
 
 # Create database tables
-models.Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Trading Bot API",
@@ -41,12 +42,12 @@ async def health_check():
 
 @app.get("/symbols", response_model=List[schemas.Symbol])
 def get_symbols(db: Session = Depends(get_db)):
-    symbols = db.query(models.Symbol).all()
+    symbols = db.query(RawPrice).all()
     return symbols
 
 @app.get("/data/{symbol}", response_model=List[schemas.MarketData])
 def get_market_data(symbol: str, db: Session = Depends(get_db)):
-    data = db.query(models.MarketData).filter(models.MarketData.symbol == symbol).all()
+    data = db.query(RawPrice).filter(RawPrice.symbol == symbol).all()
     if not data:
         raise HTTPException(status_code=404, detail=f"No data found for symbol {symbol}")
     return data
@@ -61,7 +62,7 @@ async def update_data(symbols: List[str], db: Session = Depends(get_db)):
 
 if __name__ == "__main__":
     uvicorn.run(
-        "trading_bot.main:app",
+        "stockapp.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True
