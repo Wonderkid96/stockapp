@@ -4,7 +4,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from trading_bot.db_models import Base, RawPrice, Indicator, Signal
+from stockapp.db_models import Base, RawPrice, Indicator, Signal
 
 @pytest.fixture
 def db_engine():
