@@ -13,4 +13,4 @@ def compute_opening_range(highs, lows, minutes):
     opening_low = min(lows[:minutes])
     entry = opening_high
     stop = opening_low
-    return entry, stop 
+    return entry, stop

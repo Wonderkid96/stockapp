@@ -4,18 +4,19 @@ Executor Module
 This module is responsible for polling for unexecuted signals, connecting to the Alpaca API,
 placing market orders, marking signals as executed, and logging the results.
 """
-import os
 import logging
+import os
 import time
+
+import alpaca_trade_api as tradeapi
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
-from stockapp.db_models import get_db, Signal
-import alpaca_trade_api as tradeapi
+
+from stockapp.db_models import Signal, get_db
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -31,13 +32,21 @@ if not ALPACA_API_KEY or not ALPACA_API_SECRET:
     exit(1)
 
 # Initialize Alpaca API
-api = tradeapi.REST(ALPACA_API_KEY, ALPACA_API_SECRET, ALPACA_PAPER_URL, api_version='v2')
+api = tradeapi.REST(
+    ALPACA_API_KEY, ALPACA_API_SECRET, ALPACA_PAPER_URL, api_version="v2"
+)
+
 
 def poll_and_execute(db: Session):
     """
     Poll for unexecuted signals and execute them (or simulate if dry-run).
     """
-    signals = db.query(Signal).filter(Signal.executed == False).order_by(Signal.timestamp.asc()).all()
+    signals = (
+        db.query(Signal)
+        .filter(Signal.executed.is_(False))
+        .order_by(Signal.timestamp.asc())
+        .all()
+    )
     logger.info(f"Found {len(signals)} unexecuted signals.")
     for signal in signals:
         symbol = signal.symbol
@@ -54,11 +63,21 @@ def poll_and_execute(db: Session):
             account = api.get_account()
             cash = float(account.cash)
             price = api.get_latest_trade(symbol).price
-            qty = int(cash // price) if signal_type == 'BUY' else 0
+            qty = int(cash // price) if signal_type == "BUY" else 0
             if qty > 0:
-                order = api.submit_order(symbol=symbol, qty=qty, side=signal_type.lower(), type='market', time_in_force='gtc')
+                order = api.submit_order(
+                    symbol=symbol,
+                    qty=qty,
+                    side=signal_type.lower(),
+                    type="market",
+                    time_in_force="gtc",
+                )
                 signal.executed = True
-                signal.execution_details = {"order_id": order.id, "qty": qty, "price": price}
+                signal.execution_details = {
+                    "order_id": order.id,
+                    "qty": qty,
+                    "price": price,
+                }
                 db.add(signal)
                 db.commit()
                 logger.info(f"Order placed: {order}")
@@ -68,6 +87,7 @@ def poll_and_execute(db: Session):
             logger.error(f"Order failed for {symbol}: {e}")
             continue
 
+
 def run_executor_loop(db: Session, poll_interval: int = 10):
     """
     Continuously poll and execute signals.
@@ -76,7 +96,8 @@ def run_executor_loop(db: Session, poll_interval: int = 10):
         poll_and_execute(db)
         time.sleep(poll_interval)
 
+
 # Example usage
 if __name__ == "__main__":
     db = next(get_db())
-    run_executor_loop(db, poll_interval=10) 
+    run_executor_loop(db, poll_interval=10)

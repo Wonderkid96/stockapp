@@ -5,27 +5,30 @@ This module is responsible for fetching daily OHLCV data from Yahoo Finance,
 handling rate limits and retries, and saving the data to the database.
 """
 
+import logging
+
 # Data ingestion module
 import os
 import time
-import logging
-import pandas as pd
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+
+import pandas as pd
 import yfinance as yf
+from dotenv import load_dotenv
 from sqlalchemy.orm import Session
-from stockapp.db_models import get_db, RawPrice
+
+from stockapp.db_models import RawPrice, get_db
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 BACKFILL_CHUNK = os.getenv("YFINANCE_BACKFILL_CHUNK", "30D")
+
 
 def fetch_daily(symbol: str, start: str, end: str) -> pd.DataFrame:
     """
@@ -46,11 +49,14 @@ def fetch_daily(symbol: str, start: str, end: str) -> pd.DataFrame:
             return data
         except Exception as e:
             retry_count += 1
-            wait_time = 2 ** retry_count
-            logger.error(f"Error fetching data for {symbol}: {e}. Retrying in {wait_time}s...")
+            wait_time = 2**retry_count
+            logger.error(
+                f"Error fetching data for {symbol}: {e}. Retrying in {wait_time}s..."
+            )
             time.sleep(wait_time)
     logger.error(f"Failed to fetch data for {symbol} after {max_retries} retries")
     return pd.DataFrame()
+
 
 def save_to_db(db: Session, symbol: str, data: pd.DataFrame) -> int:
     """
@@ -61,19 +67,20 @@ def save_to_db(db: Session, symbol: str, data: pd.DataFrame) -> int:
         return 0
     rows_added = 0
     for timestamp, row in data.iterrows():
-        existing = db.query(RawPrice).filter(
-            RawPrice.symbol == symbol,
-            RawPrice.timestamp == timestamp
-        ).first()
+        existing = (
+            db.query(RawPrice)
+            .filter(RawPrice.symbol == symbol, RawPrice.timestamp == timestamp)
+            .first()
+        )
         if not existing:
             price = RawPrice(
                 symbol=symbol,
                 timestamp=timestamp,
-                open=row['open'],
-                high=row['high'],
-                low=row['low'],
-                close=row['close'],
-                volume=row['volume']
+                open=row["open"],
+                high=row["high"],
+                low=row["low"],
+                close=row["close"],
+                volume=row["volume"],
             )
             db.add(price)
             rows_added += 1
@@ -81,6 +88,7 @@ def save_to_db(db: Session, symbol: str, data: pd.DataFrame) -> int:
         db.commit()
         logger.info(f"Added {rows_added} new records for {symbol}")
     return rows_added
+
 
 def backfill_data(db: Session, symbol: str, start_date: str, end_date: str = None):
     """
@@ -105,15 +113,19 @@ def backfill_data(db: Session, symbol: str, start_date: str, end_date: str = Non
         time.sleep(1)
     logger.info(f"Backfill complete for {symbol}. Added {total_records} records total.")
 
+
 def update_latest(db: Session, symbols: list):
     """
     Update database with the latest data for multiple symbols.
     """
     today = datetime.now().strftime("%Y-%m-%d")
     for symbol in symbols:
-        latest = db.query(RawPrice).filter(
-            RawPrice.symbol == symbol
-        ).order_by(RawPrice.timestamp.desc()).first()
+        latest = (
+            db.query(RawPrice)
+            .filter(RawPrice.symbol == symbol)
+            .order_by(RawPrice.timestamp.desc())
+            .first()
+        )
         if latest:
             start_date = (latest.timestamp + timedelta(days=1)).strftime("%Y-%m-%d")
         else:
@@ -122,10 +134,11 @@ def update_latest(db: Session, symbols: list):
             data = fetch_daily(symbol, start_date, today)
             save_to_db(db, symbol, data)
 
+
 # Example usage
 if __name__ == "__main__":
     db = next(get_db())
     symbol = "AAPL"
     backfill_data(db, symbol, "2023-01-01", "2023-02-01")
     # Regular update of latest data
-    update_latest(db, ["AAPL"]) 
+    update_latest(db, ["AAPL"])

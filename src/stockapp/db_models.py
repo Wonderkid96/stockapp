@@ -2,12 +2,21 @@
 SQLAlchemy ORM models for database tables.
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, JSON
+import os
+
+from dotenv import load_dotenv
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    create_engine,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-import os
-from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
@@ -27,8 +36,9 @@ Base = declarative_base()
 
 class RawPrice(Base):
     """Raw price data table."""
+
     __tablename__ = "raw_prices"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     symbol = Column(String, index=True)
     timestamp = Column(DateTime, index=True)
@@ -41,8 +51,9 @@ class RawPrice(Base):
 
 class Indicator(Base):
     """Technical indicators table."""
+
     __tablename__ = "indicators"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     symbol = Column(String, index=True)
     timestamp = Column(DateTime, index=True)
@@ -53,8 +64,9 @@ class Indicator(Base):
 
 class Signal(Base):
     """Trading signals table."""
+
     __tablename__ = "signals"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     symbol = Column(String, index=True)
     timestamp = Column(DateTime, index=True)
@@ -78,4 +90,4 @@ def get_db():
     try:
         yield db
     finally:
-        db.close() 
+        db.close()

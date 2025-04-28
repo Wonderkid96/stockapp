@@ -8,4 +8,4 @@ def volume_ok(volume, avg_volume, multiplier):
     Returns:
         bool: True if volume is sufficient
     """
-    return volume >= avg_volume * multiplier 
+    return volume >= avg_volume * multiplier

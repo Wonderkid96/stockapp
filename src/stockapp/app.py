@@ -5,17 +5,21 @@ This module creates a FastAPI server with REST and WebSocket endpoints for real-
 providing a GET /latest endpoint and a WebSocket /ws endpoint for streaming new signals.
 """
 
+import asyncio
+
 # FastAPI server (REST & WS)
 import logging
-from fastapi import FastAPI, WebSocket, Depends, HTTPException
+
+from fastapi import Depends, FastAPI, HTTPException, WebSocket
 from sqlalchemy.orm import Session
-from stockapp.db_models import get_db, Signal, init_db
-import asyncio
+from fastapi.middleware.cors import CORSMiddleware
+from .database import get_db
+from .db_models import Signal, init_db
+from .schemas import Signal as SignalSchema
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -23,7 +27,15 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Trading Bot API",
     description="API for stock market data and trading operations",
-    version="1.0.0"
+    version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8050"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Initialize database tables on startup
@@ -32,6 +44,7 @@ async def startup_event():
     init_db()
     logger.info("Database tables initialized.")
 
+
 # Dependency to get DB session
 def get_db_session():
     db = next(get_db())
@@ -39,6 +52,7 @@ def get_db_session():
         yield db
     finally:
         db.close()
+
 
 # Root endpoint
 @app.get("/")
@@ -49,42 +63,60 @@ async def root():
             "root": "/",
             "health": "/health",
             "latest_signals": "/latest",
-            "websocket": "/ws"
-        }
+            "websocket": "/ws",
+        },
     }
+
 
 # Health check endpoint
 @app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+def health_check():
+    """Health check endpoint."""
+    return {"status": "ok"}
+
 
 # REST endpoint to get latest signals
 @app.get("/latest")
 async def get_latest_signals(db: Session = Depends(get_db_session)):
     try:
-        signals = db.query(Signal).order_by(Signal.timestamp.desc()).limit(10).all()
-        return [{"symbol": s.symbol, "timestamp": s.timestamp, "signal_type": s.signal_type, "details": s.details} for s in signals]
+        signals = (
+            db.query(Signal)
+            .order_by(Signal.timestamp.desc())
+            .limit(20)
+            .all()
+        )
+        return [SignalSchema.from_orm(signal) for signal in signals]
     except Exception as e:
         logger.error(f"Error fetching latest signals: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 # WebSocket endpoint to stream new signals
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db_session)):
+async def websocket_endpoint(
+    websocket: WebSocket, db: Session = Depends(get_db_session)
+):
     await websocket.accept()
     logger.info("WebSocket connection established.")
     last_id = 0
     while True:
         try:
             # Poll for new signals
-            new_signals = db.query(Signal).filter(Signal.id > last_id).order_by(Signal.timestamp.asc()).all()
+            new_signals = (
+                db.query(Signal)
+                .filter(Signal.id > last_id)
+                .order_by(Signal.timestamp.asc())
+                .all()
+            )
             for signal in new_signals:
-                await websocket.send_json({
-                    "symbol": signal.symbol,
-                    "timestamp": signal.timestamp,
-                    "signal_type": signal.signal_type,
-                    "details": signal.details
-                })
+                await websocket.send_json(
+                    {
+                        "symbol": signal.symbol,
+                        "timestamp": signal.timestamp,
+                        "signal_type": signal.signal_type,
+                        "details": signal.details,
+                    }
+                )
                 last_id = signal.id
             # Sleep to avoid hammering the database
             await asyncio.sleep(5)
@@ -93,7 +125,9 @@ async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db_
             await websocket.close()
             break
 
+
 # Example usage
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -7,4 +7,4 @@ def premarket_scan(data):
         list: top 20 symbols
     """
     sorted_ = sorted(data, key=lambda x: x["gap_pct"], reverse=True)
-    return [r["symbol"] for r in sorted_[:20]] 
+    return [r["symbol"] for r in sorted_[:20]]
